@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# stray compiled output next to convex TS sources (Convex bundles the .ts;
+# _generated/*.js is legit and lives in a subdir, so it's not matched)
+/convex/*.js
+/convex/*.js.map
