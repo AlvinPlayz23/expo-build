@@ -10,10 +10,10 @@ export function SetupGate({ children }: { children: ReactNode }) {
   return (
     <div className="ambient-glow flex min-h-dvh items-center justify-center bg-background px-6 py-16 text-foreground">
       <div className="w-full max-w-xl animate-fade-in-up">
-        <div className="flex items-center gap-3">
-          <div className="animate-shimmer flex h-9 w-9 items-center justify-center rounded-xl text-sm font-semibold text-accent-foreground shadow-[0_1px_2px_rgba(0,0,0,0.3),0_4px_14px_rgba(232,116,74,0.25)]">
-            E
-          </div>
+        <div className="flex items-center gap-3.5">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-accent shrink-0 select-none">
+            <path d="M12 2L2 9.5l3.5 2.6L12 7.2l6.5 4.9 3.5-2.6L12 2zM12 22l10-7.5-3.5-2.6L12 16.8l-6.5-4.9L2 14.5 12 22z" fill="currentColor" />
+          </svg>
           <span className="font-display text-lg font-normal tracking-[-0.01em]">Expo Builder</span>
         </div>
         <h1 className="mt-8 font-display text-3xl font-normal tracking-tight text-foreground" style={{ background: "linear-gradient(180deg, #f0eee8 30%, #c8a080 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>

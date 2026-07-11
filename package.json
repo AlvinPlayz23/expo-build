@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.110.0",
     "convex": "^1.42.1",
     "e2b": "^2.32.0",
+    "lucide-react": "^1.24.0",
     "next": "16.2.10",
     "openai": "^6.46.0",
     "qrcode": "^1.5.4",
