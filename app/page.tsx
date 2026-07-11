@@ -1,11 +1,69 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convex/api";
 import { SetupGate } from "@/components/SetupGate";
+
+const SUGGESTIONS = [
+  {
+    color: "text-sky-700 dark:text-sky-400",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M6.5 10l2 2 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+    label: "Todo app with categories",
+    prompt: "A todo app with categories, priorities, and a dark theme",
+  },
+  {
+    color: "text-amber-700 dark:text-amber-400",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <circle cx="12.5" cy="7.5" r="3.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M5 13a4 4 0 014-4h4a4 4 0 014 4v2a1 1 0 01-1 1H6a1 1 0 01-1-1v-2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      </svg>
+    ),
+    label: "Weather app with location",
+    prompt:
+      "A weather app that uses geolocation to show current conditions and a 5-day forecast",
+  },
+  {
+    color: "text-emerald-700 dark:text-emerald-400",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path
+          d="M10 3c1 3 3 4 3 7a3 3 0 11-6 0c0-1 .5-2 1-3 .5 1 1.5 1.5 2-4z"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+    label: "Habit tracker with streaks",
+    prompt: "A habit tracker app with daily streaks, reminders, and a weekly progress chart",
+  },
+  {
+    color: "text-brand",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path
+          d="M6 3v6a2 2 0 002 2v6M6 3v3M6 6v3M14 3v14M14 3a2 2 0 010 6"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+    label: "Recipe app with search",
+    prompt:
+      "A recipe app with search by ingredient, favorites, and step-by-step cooking instructions",
+  },
+] as const;
 
 export default function Home() {
   return (
@@ -17,83 +75,252 @@ export default function Home() {
 
 function HomeInner() {
   const router = useRouter();
-  const projects = useQuery(api.projects.list) as any[] | undefined;
+  const projects = useQuery(api.projects.list) as
+    | { _id: string; name: string; sandboxStatus: string }[]
+    | undefined;
   const createProject = useMutation(api.projects.create);
   const removeProject = useMutation(api.projects.remove);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   async function start() {
     const text = prompt.trim();
     if (!text || busy) return;
     setBusy(true);
-    const name = text.length > 40 ? text.slice(0, 40) + "…" : text;
+    const name = text.length > 40 ? text.slice(0, 40) + "\u2026" : text;
     const id = await createProject({ name });
     router.push(`/project/${id}?prompt=${encodeURIComponent(text)}`);
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-6 py-16">
-      <h1 className="text-3xl font-semibold tracking-tight">Expo Builder</h1>
-      <p className="mt-2 text-zinc-500">
-        Describe a mobile app. Watch it build live, powered by AI + Expo.
-      </p>
-
-      <div className="mt-8">
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") start();
-          }}
-          rows={3}
-          placeholder="A todo app with categories and a dark theme…"
-          className="w-full resize-none rounded-xl border border-zinc-300 bg-white p-4 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-300"
+    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
+      {/* Sidebar overlay - mobile only */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
         />
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-xs text-zinc-400">⌘/Ctrl + Enter</span>
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed z-40 h-dvh w-[260px] shrink-0 border-r border-border bg-sidebar transition-transform duration-200 ease-out md:static md:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex h-full flex-col">
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 px-4 py-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-brand text-xs font-semibold text-accent-foreground shadow-[0_1px_2px_rgba(0,0,0,0.16),0_4px_10px_rgba(220,74,39,0.18)]">
+              E
+            </div>
+            <div>
+              <span className="block text-sm font-semibold leading-none">Expo Builder</span>
+              <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.16em] text-muted">Mobile workbench</span>
+            </div>
+          </div>
+
+          {/* New app */}
+          <div className="px-3 pb-3">
+            <button
+              onClick={() => {
+                setSidebarOpen(false);
+                setPrompt("");
+                textareaRef.current?.focus();
+              }}
+              className="flex min-h-10 w-full items-center gap-2 rounded-[10px] bg-foreground px-3 py-2.5 text-sm font-medium text-background shadow-[0_1px_2px_rgba(0,0,0,0.18)] transition-[background-color,transform] hover:bg-brand hover:text-accent-foreground active:scale-[0.96]"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              New app
+            </button>
+          </div>
+
+          {/* Projects list */}
+          <div className="scrollbar-thin flex-1 overflow-y-auto px-2">
+            <div className="px-2 py-2 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted">Your apps</div>
+            {projects === undefined ? (
+              <div className="px-2 py-2 text-sm text-muted">{"Loading\u2026"}</div>
+            ) : projects.length === 0 ? (
+              <div className="px-2 py-2 text-sm text-muted">
+                No apps yet. Start building above.
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {projects.map((p) => (
+                  <ProjectItem
+                    key={p._id}
+                    project={p}
+                    onDelete={() => removeProject({ id: p._id })}
+                    onNavigate={() => setSidebarOpen(false)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* Main area */}
+      <div className="flex flex-1 flex-col">
+        {/* Mobile header */}
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3 md:hidden">
           <button
-            onClick={start}
-            disabled={busy || !prompt.trim()}
-            className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+            onClick={() => setSidebarOpen(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-sidebar-hover"
+            aria-label="Open menu"
           >
-            {busy ? "Creating…" : "Build it"}
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
           </button>
+          <span className="text-sm font-semibold">Expo Builder</span>
+        </div>
+
+        {/* Centered content */}
+        <div className="ambient-glow flex flex-1 flex-col items-center justify-center px-6 py-8">
+          {/* Greeting */}
+          <div className="animate-fade-in-up text-center" style={{ animationDelay: "0ms" }}>
+            <div className="mx-auto mb-4 flex w-fit items-center gap-2 rounded-full bg-sidebar px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-muted shadow-[inset_0_0_0_1px_var(--border)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+              Expo workspace ready
+            </div>
+            <h1 className="text-3xl font-semibold tracking-[-0.035em] md:text-5xl">
+              Build the app you wish existed.
+            </h1>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted md:text-base">
+              Describe the product and get a working Expo app—code, preview, and device testing in one place.
+            </p>
+          </div>
+
+          {/* Input */}
+          <div className="animate-fade-in-up mt-10 w-full max-w-2xl" style={{ animationDelay: "100ms" }}>
+            <div className="relative rounded-[20px] bg-input-bg shadow-[0_0_0_1px_var(--input-border),0_10px_35px_rgba(32,33,29,0.08)] transition-[box-shadow] focus-within:shadow-[0_0_0_2px_var(--brand),0_14px_40px_rgba(32,33,29,0.12)]">
+              <textarea
+                ref={textareaRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") start();
+                }}
+                rows={3}
+                placeholder={"Describe the app you want to build\u2026"}
+                className="w-full resize-none bg-transparent px-5 pt-4 pb-14 text-sm outline-none placeholder:text-muted"
+              />
+              <div className="absolute bottom-3.5 right-3.5 flex items-center gap-2">
+                <button
+                  onClick={() => start()}
+                  disabled={busy || !prompt.trim()}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-accent-foreground shadow-[0_2px_8px_rgba(220,74,39,0.28)] transition-[background-color,transform,opacity] hover:bg-accent-hover active:scale-[0.96] disabled:opacity-30 disabled:shadow-none"
+                  aria-label="Send"
+                >
+                  {busy ? (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="animate-spin">
+                      <path
+                        d="M7 1.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        opacity="0.3"
+                      />
+                      <path d="M7 1.5a5.5 5.5 0 015.5 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path
+                        d="M8 13V3M4 7l4-4 4 4"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Prompt suggestions */}
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s.label}
+                  onClick={() => {
+                    setPrompt(s.prompt);
+                    textareaRef.current?.focus();
+                  }}
+                  className="group flex min-h-10 items-center gap-2 rounded-full bg-suggestion-bg px-3.5 py-2 text-left shadow-[0_0_0_1px_var(--suggestion-border),0_1px_2px_rgba(0,0,0,0.04)] transition-[color,transform,box-shadow] hover:text-foreground hover:shadow-[0_0_0_1px_var(--input-border),0_4px_12px_rgba(32,33,29,0.07)] active:scale-[0.96]"
+                >
+                  <span className={`shrink-0 [&>svg]:h-4 [&>svg]:w-4 ${s.color}`}>
+                    {s.icon}
+                  </span>
+                  <span className="text-xs text-muted transition-colors group-hover:text-foreground sm:text-sm">
+                    {s.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <p className="mt-3 text-center text-xs text-muted">
+              Expo Builder can make mistakes. Check important code.
+            </p>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-12">
-        <h2 className="text-sm font-medium text-zinc-500">Your apps</h2>
-        {projects === undefined ? (
-          <p className="mt-4 text-sm text-zinc-400">Loading…</p>
-        ) : projects.length === 0 ? (
-          <p className="mt-4 text-sm text-zinc-400">
-            No apps yet. Describe one above to get started.
-          </p>
-        ) : (
-          <ul className="mt-4 divide-y divide-zinc-200 dark:divide-zinc-800">
-            {projects.map((p) => (
-              <li key={p._id} className="flex items-center gap-3 py-3">
-                <Link
-                  href={`/project/${p._id}`}
-                  className="flex-1 truncate text-sm hover:underline"
-                >
-                  {p.name}
-                </Link>
-                <span className="text-xs text-zinc-400">
-                  {p.sandboxStatus === "running" ? "● live" : p.sandboxStatus}
-                </span>
-                <button
-                  onClick={() => removeProject({ id: p._id })}
-                  className="text-xs text-zinc-400 hover:text-red-500"
-                >
-                  delete
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </main>
+function ProjectItem({
+  project,
+  onDelete,
+  onNavigate,
+}: {
+  project: {
+    _id: string;
+    name: string;
+    sandboxStatus: string;
+  };
+  onDelete: () => void;
+  onNavigate: () => void;
+}) {
+  const isRunning = project.sandboxStatus === "running";
+
+  return (
+    <div className="group relative flex min-h-10 items-center rounded-lg px-2 py-2 transition-colors hover:bg-sidebar-hover">
+      <Link
+        href={`/project/${project._id}`}
+        onClick={onNavigate}
+        className="flex flex-1 items-center gap-2 truncate text-sm"
+      >
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            isRunning ? "bg-green-500" : "bg-zinc-400"
+          }`}
+        />
+        <span className="truncate">{project.name}</span>
+      </Link>
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted opacity-0 transition-[color,opacity] hover:text-red-600 group-hover:opacity-100 focus:opacity-100"
+        aria-label="Delete project"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path
+            d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4 4v7a1 1 0 001 1h4a1 1 0 001-1V4"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+    </div>
   );
 }
