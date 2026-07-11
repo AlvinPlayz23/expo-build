@@ -155,8 +155,31 @@ async function curlHttpCode(
   return m?.[1] ?? "000";
 }
 
-/** Force Metro to re-resolve App.js's import graph against the current tree. */
-async function touchEntry(sandbox: Sandbox): Promise<void> {
+/**
+ * Nudge Metro's file watcher to (re)index the tree, then re-resolve App.js.
+ *
+ * Order matters: touch every dependency file FIRST so Metro picks them up into
+ * its module map (the watcher often misses files created in brand-new
+ * subdirectories like `components/`), THEN touch App.js LAST so it re-resolves
+ * its imports against the now-fully-indexed tree. Touching only App.js is
+ * insufficient — if the components were never indexed, App.js keeps failing to
+ * resolve them no matter how many times it's touched.
+ */
+async function touchTree(
+  sandbox: Sandbox,
+  dependencyPaths: string[],
+): Promise<void> {
+  // Touch dependencies first (in write order), so the watcher indexes them.
+  if (dependencyPaths.length > 0) {
+    log("sandbox", `touching ${dependencyPaths.length} dependency file(s) then App.js: ${dependencyPaths.join(", ")}`);
+  }
+  for (const rel of dependencyPaths) {
+    const safe = rel.replace(/^\/+/, "");
+    await sandbox.commands
+      .run(`touch ${JSON.stringify(`${APP_DIR}/${safe}`)}`)
+      .catch(() => {});
+  }
+  // App.js last, so it re-resolves against the complete, indexed tree.
   await sandbox.commands.run(`touch ${APP_DIR}/App.js`).catch(() => {});
 }
 
@@ -169,9 +192,10 @@ async function touchEntry(sandbox: Sandbox): Promise<void> {
  * no local imports to resolve.
  *
  * Warm the web bundle server-side: request it, and on a transient resolution
- * miss re-`touch` App.js to invalidate the cached graph, then retry a few
- * times. This is bounded so it never stalls the chat response for long, and it
- * bails immediately on a real code error so Metro's redbox still shows.
+ * miss re-`touch` the dependency files then App.js to invalidate the cached
+ * graph, then retry a few times. This is bounded so it never stalls the chat
+ * response for long, and it bails immediately on a real code error so Metro's
+ * redbox still shows.
  *
  * This runs *before* syncSandbox returns the preview URL, i.e. before the
  * client mounts the iframe and starts polling /preview-status, so we don't
@@ -180,7 +204,10 @@ async function touchEntry(sandbox: Sandbox): Promise<void> {
  * request may itself be the cold compile (15–60s) — a short timeout there
  * would abort it and trigger a needless re-touch.
  */
-async function warmWebBundle(sandbox: Sandbox): Promise<void> {
+async function warmWebBundle(
+  sandbox: Sandbox,
+  dependencyPaths: string[],
+): Promise<void> {
   const bundleUrl =
     `http://localhost:${PREVIEW_PORT}/index.bundle?platform=web&dev=true&minify=false`;
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -199,8 +226,11 @@ async function warmWebBundle(sandbox: Sandbox): Promise<void> {
         );
         return;
       }
-      logErr("sandbox", "resolution miss — re-touching App.js and retrying");
-      await touchEntry(sandbox);
+      logErr(
+        "sandbox",
+        "resolution miss — re-touching dependency files then App.js and retrying",
+      );
+      await touchTree(sandbox, dependencyPaths);
       await new Promise((r) => setTimeout(r, 1500));
       continue;
     }
@@ -391,6 +421,23 @@ export async function syncSandbox(opts: {
   // resolve imports while E2B is still creating their files; Metro then caches
   // the missing-module result and keeps returning a JSON 500 bundle response.
   if (dependencyWrites.length > 0) {
+    // Pre-create parent directories so Metro's watcher has an existing dir to
+    // watch before the files land. The watcher frequently misses files created
+    // in a brand-new subdirectory (the create event fires before the watch on
+    // the new dir is added), which is the core cause of the cached JSON-500.
+    const dirs = Array.from(
+      new Set(
+        dependencyWrites
+          .map((f) => f.path.replace(/^\/+/, ""))
+          .map((p) => p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "")
+          .filter((d) => d.length > 0),
+      ),
+    );
+    for (const dir of dirs) {
+      await sandbox.commands
+        .run(`mkdir -p ${JSON.stringify(`${APP_DIR}/${dir}`)}`)
+        .catch(() => {});
+    }
     await sandbox.files.write(
       dependencyWrites.map((f) => ({
         path: `${APP_DIR}/${f.path.replace(/^\/+/, "")}`,
@@ -420,8 +467,9 @@ export async function syncSandbox(opts: {
   // re-resolves against the now-complete tree, then warm the bundle with a
   // bounded retry loop. The single-file path skips this to stay fast.
   if (dependencyWrites.length > 0) {
-    await touchEntry(sandbox);
-    await warmWebBundle(sandbox);
+    const dependencyPaths = dependencyWrites.map((f) => f.path.replace(/^\/+/, ""));
+    await touchTree(sandbox, dependencyPaths);
+    await warmWebBundle(sandbox, dependencyPaths);
   }
 
   // Note: we do NOT block on the web bundle compiling here — that can take
