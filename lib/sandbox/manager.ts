@@ -155,6 +155,61 @@ async function curlHttpCode(
   return m?.[1] ?? "000";
 }
 
+/** Force Metro to re-resolve App.js's import graph against the current tree. */
+async function touchEntry(sandbox: Sandbox): Promise<void> {
+  await sandbox.commands.run(`touch ${APP_DIR}/App.js`).catch(() => {});
+}
+
+/**
+ * After writing multiple files, Metro's in-container file watcher can miss the
+ * creation of files in brand-new subdirectories (e.g. `components/`). It then
+ * caches an "Unable to resolve module" miss and serves the web bundle as a JSON
+ * 500 *forever* — the browser reports a MIME error ("Refused to execute script
+ * … MIME type ('application/json')"). A single App.js works only because it has
+ * no local imports to resolve.
+ *
+ * Warm the web bundle server-side: request it, and on a transient resolution
+ * miss re-`touch` App.js to invalidate the cached graph, then retry a few
+ * times. This is bounded so it never stalls the chat response for long, and it
+ * bails immediately on a real code error so Metro's redbox still shows.
+ *
+ * This runs *before* syncSandbox returns the preview URL, i.e. before the
+ * client mounts the iframe and starts polling /preview-status, so we don't
+ * fight a concurrent bundle curl (two parallel bundle requests can abort each
+ * other's first compile). The first attempt uses a long timeout because that
+ * request may itself be the cold compile (15–60s) — a short timeout there
+ * would abort it and trigger a needless re-touch.
+ */
+async function warmWebBundle(sandbox: Sandbox): Promise<void> {
+  const bundleUrl =
+    `http://localhost:${PREVIEW_PORT}/index.bundle?platform=web&dev=true&minify=false`;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    // First attempt may be the cold compile; give it room. Retries are faster.
+    const code = await curlHttpCode(sandbox, bundleUrl, attempt === 1 ? 90 : 45);
+    log("sandbox", `warm bundle attempt ${attempt} → HTTP ${code}`);
+    if (code === "200") return;
+
+    if (code === "500" || code === "503") {
+      const logText = await readLog(sandbox);
+      // Only retry the watcher race, not genuine compile/syntax errors.
+      if (!/Unable to resolve/i.test(logText)) {
+        logErr(
+          "sandbox",
+          "web bundle failed with a code error (not a resolution race) — showing redbox",
+        );
+        return;
+      }
+      logErr("sandbox", "resolution miss — re-touching App.js and retrying");
+      await touchEntry(sandbox);
+      await new Promise((r) => setTimeout(r, 1500));
+      continue;
+    }
+
+    // 000/timeout or other transient — stop warming; the client keeps polling.
+    return;
+  }
+}
+
 /**
  * Connect to an *existing* sandbox without creating a new one. Used by the
  * readiness probe so a status check never spins up a fresh box.
@@ -358,6 +413,15 @@ export async function syncSandbox(opts: {
         data: f.content,
       })),
     );
+  }
+
+  // Multi-file writes are where Metro's watcher misses new subdir files and
+  // caches a resolution miss (the JSON-500 / MIME error). Touch App.js so it
+  // re-resolves against the now-complete tree, then warm the bundle with a
+  // bounded retry loop. The single-file path skips this to stay fast.
+  if (dependencyWrites.length > 0) {
+    await touchEntry(sandbox);
+    await warmWebBundle(sandbox);
   }
 
   // Note: we do NOT block on the web bundle compiling here — that can take
