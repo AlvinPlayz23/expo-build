@@ -103,35 +103,44 @@ function Workspace() {
   const selectedFile = files?.find((f) => f.path === selected);
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col bg-background text-foreground">
       {/* top bar */}
-      <header className="flex items-center gap-3 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-        <Link href="/" className="text-sm text-zinc-500 hover:underline">
+      <header className="flex h-14 items-center gap-3 border-b border-border bg-sidebar px-4">
+        <Link href="/" className="text-xs font-semibold uppercase tracking-[0.08em] text-muted hover:text-accent transition-colors">
           ← Apps
         </Link>
-        <span className="truncate text-sm font-medium">
+        <span className="h-4 w-[1px] bg-border" />
+        <span className="truncate font-display text-[15px] font-normal tracking-[-0.01em]">
           {project?.name ?? "…"}
         </span>
-        <span className="ml-auto text-xs text-zinc-400">
-          {project?.sandboxStatus === "running"
-            ? "● preview live"
-            : project?.sandboxStatus === "starting"
-              ? "◌ booting…"
-              : project?.sandboxStatus ?? ""}
+        <span className="ml-auto flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-muted">
+          {project?.sandboxStatus === "running" ? (
+            <>
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-status-pulse" />
+              <span>preview live</span>
+            </>
+          ) : project?.sandboxStatus === "starting" ? (
+            <>
+              <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+              <span>booting…</span>
+            </>
+          ) : (
+            <span>{project?.sandboxStatus ?? ""}</span>
+          )}
         </span>
       </header>
 
       <div className="flex min-h-0 flex-1">
         {/* chat pane */}
-        <section className="flex w-[42%] min-w-[320px] flex-col border-r border-zinc-200 dark:border-zinc-800">
+        <section className="flex w-[40%] min-w-[320px] max-w-[500px] flex-col border-r border-border bg-background">
           <ChatLog messages={messages} sending={sending} />
           {banner && (
-            <div className="mx-3 mb-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+            <div className="mx-3 mb-3 rounded-xl border border-[#3d1515] bg-[#1a0f0f] px-3.5 py-2.5 text-xs text-red-400 animate-fade-in">
               {banner}
             </div>
           )}
-          <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
-            <div className="flex items-end gap-2">
+          <div className="border-t border-border bg-surface/50 p-4">
+            <div className="flex items-end gap-2.5">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -144,12 +153,12 @@ function Workspace() {
                   sending ? "Working…" : "Describe a change…"
                 }
                 disabled={sending}
-                className="flex-1 resize-none rounded-lg border border-zinc-300 bg-white p-2 text-sm outline-none focus:border-zinc-900 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-300"
+                className="w-full resize-none rounded-xl border border-input-border bg-input-bg p-3 text-sm outline-none transition-[border-color,box-shadow] focus:border-accent focus:shadow-[0_0_0_2px_var(--accent-glow)] disabled:opacity-50 placeholder:text-muted/50"
               />
               <button
                 onClick={() => send(input)}
                 disabled={sending || !input.trim()}
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+                className="flex h-10 items-center justify-center rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground shadow-[0_2px_8px_rgba(232,116,74,0.35)] transition-all hover:bg-accent-hover hover:shadow-[0_2px_14px_rgba(232,116,74,0.5)] active:scale-[0.96] disabled:opacity-30 disabled:shadow-none"
               >
                 Send
               </button>
@@ -158,8 +167,8 @@ function Workspace() {
         </section>
 
         {/* preview / files pane */}
-        <section className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-1 border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+        <section className="flex min-w-0 flex-1 flex-col bg-background">
+          <div className="flex h-11 items-center gap-1 border-b border-border bg-sidebar/50 px-3">
             <Tab active={tab === "preview"} onClick={() => setTab("preview")}>
               Preview
             </Tab>
@@ -169,17 +178,17 @@ function Workspace() {
             <Tab active={tab === "device"} onClick={() => setTab("device")}>
               📱 Device
             </Tab>
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex items-center gap-3">
               <button
                 onClick={() => setReloadKey((k) => k + 1)}
-                className="text-xs text-zinc-500 hover:underline"
+                className="text-xs text-muted hover:text-accent transition-colors"
               >
                 reload
               </button>
               <button
                 onClick={restartPreview}
                 disabled={sending}
-                className="text-xs text-zinc-500 hover:underline disabled:opacity-40"
+                className="text-xs text-muted hover:text-accent transition-colors disabled:opacity-40"
               >
                 restart
               </button>
@@ -188,7 +197,7 @@ function Workspace() {
                   href={project.previewUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-xs text-zinc-500 hover:underline"
+                  className="text-xs text-muted hover:text-accent transition-colors"
                 >
                   open ↗
                 </a>
@@ -196,27 +205,29 @@ function Workspace() {
             </div>
           </div>
 
-          {tab === "preview" ? (
-            <PreviewPane
-              projectId={id}
-              url={project?.previewUrl}
-              status={project?.sandboxStatus}
-              reloadKey={reloadKey}
-            />
-          ) : tab === "files" ? (
-            <FilesPane
-              files={files}
-              selected={selected}
-              onSelect={setSelected}
-              selectedFile={selectedFile}
-            />
-          ) : (
-            <DevicePane
-              projectId={id}
-              deviceUrl={project?.deviceUrl}
-              hasFiles={!!files && files.length > 0}
-            />
-          )}
+          <div className="flex min-h-0 flex-1">
+            {tab === "preview" ? (
+              <PreviewPane
+                projectId={id}
+                url={project?.previewUrl}
+                status={project?.sandboxStatus}
+                reloadKey={reloadKey}
+              />
+            ) : tab === "files" ? (
+              <FilesPane
+                files={files}
+                selected={selected}
+                onSelect={setSelected}
+                selectedFile={selectedFile}
+              />
+            ) : (
+              <DevicePane
+                projectId={id}
+                deviceUrl={project?.deviceUrl}
+                hasFiles={!!files && files.length > 0}
+              />
+            )}
+          </div>
         </section>
       </div>
     </div>
@@ -236,11 +247,11 @@ function ChatLog({
   }, [messages]);
 
   return (
-    <div className="flex-1 space-y-4 overflow-y-auto p-4">
+    <div className="scrollbar-thin flex-1 space-y-4 overflow-y-auto p-4">
       {messages === undefined ? (
-        <p className="text-sm text-zinc-400">Loading…</p>
+        <p className="text-sm text-muted">Loading…</p>
       ) : messages.length === 0 ? (
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm leading-relaxed text-muted">
           Describe the app you want. The AI will write the Expo code and it’ll
           appear in the preview.
         </p>
@@ -248,25 +259,25 @@ function ChatLog({
         messages.map((m) => (
           <div
             key={m._id}
-            className={m.role === "user" ? "text-right" : "text-left"}
+            className={`animate-message-in flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}
           >
             <div
-              className={`inline-block max-w-[92%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${
+              className={`inline-block max-w-[92%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm ${
                 m.role === "user"
-                  ? "bg-zinc-900 text-white dark:bg-white dark:text-black"
-                  : "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                  ? "bg-accent text-accent-foreground shadow-[0_2px_8px_rgba(232,116,74,0.2)]"
+                  : "bg-surface-raised text-foreground border border-border/40"
               }`}
             >
               {m.content || (m.streaming ? "…" : "")}
               {m.streaming && (
-                <span className="ml-1 inline-block animate-pulse">▍</span>
+                <span className="ml-1 inline-block animate-pulse text-accent">▍</span>
               )}
             </div>
           </div>
         ))
       )}
       {sending && messages && messages[messages.length - 1]?.role === "user" && (
-        <p className="text-xs text-zinc-400">Thinking…</p>
+        <p className="text-xs text-muted animate-pulse">Thinking…</p>
       )}
       <div ref={endRef} />
     </div>
@@ -347,7 +358,7 @@ function PreviewPane({
 
   if (!url) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center bg-[#17171a]">
         {booting ? (
           <CompilingState
             title="Booting Expo sandbox"
@@ -355,12 +366,12 @@ function PreviewPane({
             elapsedSec={elapsedSec}
           />
         ) : status === "error" ? (
-          <p className="max-w-sm text-sm text-zinc-400">
+          <p className="max-w-sm text-sm text-muted">
             The sandbox failed to start. Check your E2B key / template, then hit
             restart.
           </p>
         ) : (
-          <p className="max-w-sm text-sm text-zinc-400">
+          <p className="max-w-sm text-sm text-muted">
             No preview yet. Send a message to build the app.
           </p>
         )}
@@ -370,7 +381,7 @@ function PreviewPane({
 
   if (!bundleReady) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center bg-[#17171a]">
         <CompilingState
           title="Compiling web bundle"
           detail="Metro is bundling your Expo app for the browser preview."
@@ -384,7 +395,7 @@ function PreviewPane({
     <iframe
       key={`${reloadKey}-${url}`}
       src={url}
-      className="flex-1 bg-white"
+      className="flex-1 bg-white border-l border-border"
       title="Expo preview"
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
     />
@@ -403,16 +414,16 @@ function CompilingState({
   return (
     <div className="flex max-w-sm flex-col items-center gap-4">
       <div
-        className="h-9 w-9 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-100"
+        className="h-9 w-9 animate-spin rounded-full border-2 border-border border-t-accent"
         aria-hidden
       />
       <div className="space-y-1.5">
-        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+        <p className="text-sm font-medium text-foreground">
           {title}
         </p>
-        <p className="text-xs leading-relaxed text-zinc-500">{detail}</p>
+        <p className="text-xs leading-relaxed text-muted">{detail}</p>
         {typeof elapsedSec === "number" && (
-          <p className="font-mono text-xs tabular-nums text-zinc-400">
+          <p className="font-mono text-xs tabular-nums text-muted">
             {elapsedSec}s
           </p>
         )}
@@ -474,7 +485,7 @@ function DevicePane({
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto p-8 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto p-8 text-center bg-[#0e0e10]">
       {loading && !deviceUrl ? (
         <CompilingState
           title="Starting Expo Go tunnel"
@@ -483,7 +494,7 @@ function DevicePane({
         />
       ) : deviceUrl ? (
         <>
-          <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm outline outline-1 outline-black/10 dark:border-zinc-700 dark:outline-white/10">
+          <div className="rounded-2xl border border-border bg-white p-4 shadow-xl">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`/api/qr?data=${encodeURIComponent(deviceUrl)}`}
@@ -494,22 +505,22 @@ function DevicePane({
             />
           </div>
           <div className="max-w-sm space-y-1">
-            <p className="text-sm font-medium text-balance">
+            <p className="text-sm font-medium text-foreground">
               Scan with Expo Go
             </p>
-            <p className="text-xs leading-relaxed text-zinc-500 text-pretty">
+            <p className="text-xs leading-relaxed text-muted text-pretty">
               Install <b>Expo Go</b> from the App Store / Play Store, open it,
               and scan this code (or use Camera on iOS). Hot reload works as you
-              chat — same as a local <code className="font-mono">npx expo start</code>, but via a tunnel because the sandbox isn’t on your LAN.
+              chat — same as a local <code className="font-mono text-accent">npx expo start</code>, but via a tunnel because the sandbox isn’t on your LAN.
             </p>
           </div>
           <div className="flex w-full max-w-sm items-center gap-2">
-            <code className="flex-1 truncate rounded-lg bg-zinc-100 px-3 py-2 text-left font-mono text-xs dark:bg-zinc-800">
+            <code className="flex-1 truncate rounded-lg bg-surface border border-border px-3 py-2 text-left font-mono text-xs text-muted">
               {deviceUrl}
             </code>
             <button
               onClick={copy}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-xs transition-transform active:scale-[0.96] hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="rounded-lg border border-border px-3.5 py-2 text-xs transition-all active:scale-[0.96] hover:bg-surface-raised text-foreground"
             >
               {copied ? "✓" : "copy"}
             </button>
@@ -517,39 +528,39 @@ function DevicePane({
           <button
             onClick={fetchTunnel}
             disabled={loading}
-            className="min-h-10 text-xs text-zinc-500 hover:underline disabled:opacity-40"
+            className="min-h-10 text-xs text-muted hover:text-accent transition-colors disabled:opacity-40"
           >
             {loading ? `refreshing… ${elapsedSec}s` : "refresh tunnel"}
           </button>
         </>
       ) : (
         <>
-          <div className="text-4xl" aria-hidden>
+          <div className="text-4xl filter drop-shadow-md animate-bounce" aria-hidden>
             📱
           </div>
-          <div className="max-w-sm space-y-1">
-            <p className="text-sm font-medium text-balance">
+          <div className="max-w-sm space-y-2">
+            <p className="text-sm font-medium text-foreground">
               Preview on your phone
             </p>
-            <p className="text-xs leading-relaxed text-zinc-500 text-pretty">
+            <p className="text-xs leading-relaxed text-muted text-pretty">
               Get a QR code to open this app live in <b>Expo Go</b>. Local{" "}
-              <code className="font-mono">npx expo start</code> QR codes use your
+              <code className="font-mono text-accent/80">npx expo start</code> QR codes use your
               LAN IP — that can’t reach an E2B sandbox, so we start{" "}
-              <code className="font-mono">expo start --tunnel</code> and scrape
-              the public <code className="font-mono">exp://…exp.direct</code> URL.
+              <code className="font-mono text-accent/80">expo start --tunnel</code> and scrape
+              the public <code className="font-mono text-accent/80">exp://…exp.direct</code> URL.
             </p>
           </div>
           <button
             onClick={fetchTunnel}
             disabled={loading || !hasFiles}
-            className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition-transform active:scale-[0.96] disabled:opacity-40 dark:bg-white dark:text-black"
+            className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground shadow-[0_2px_8px_rgba(232,116,74,0.35)] transition-all active:scale-[0.96] hover:bg-accent-hover disabled:opacity-40"
           >
             {hasFiles ? "Get QR code" : "Build the app first"}
           </button>
         </>
       )}
       {error && (
-        <p className="max-w-sm text-xs leading-relaxed text-red-500">{error}</p>
+        <p className="max-w-sm text-xs leading-relaxed text-danger">{error}</p>
       )}
     </div>
   );
@@ -568,23 +579,23 @@ function FilesPane({
 }) {
   return (
     <div className="flex min-h-0 flex-1">
-      <ul className="w-56 shrink-0 overflow-y-auto border-r border-zinc-200 p-2 text-sm dark:border-zinc-800">
+      <ul className="scrollbar-thin w-56 shrink-0 overflow-y-auto border-r border-border bg-sidebar p-2 text-sm">
         {files === undefined ? (
-          <li className="p-2 text-zinc-400">Loading…</li>
+          <li className="p-2 text-muted">Loading…</li>
         ) : files.length === 0 ? (
-          <li className="p-2 text-zinc-400">No files yet.</li>
+          <li className="p-2 text-muted">No files yet.</li>
         ) : (
           files
             .slice()
             .sort((a, b) => a.path.localeCompare(b.path))
             .map((f) => (
-              <li key={f._id}>
+              <li key={f._id} className="mb-0.5">
                 <button
                   onClick={() => onSelect(f.path)}
-                  className={`w-full truncate rounded px-2 py-1 text-left font-mono text-xs ${
+                  className={`w-full truncate rounded px-2.5 py-1.5 text-left font-mono text-xs transition-colors ${
                     selected === f.path
-                      ? "bg-zinc-200 dark:bg-zinc-700"
-                      : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      ? "bg-surface-raised text-foreground border border-border/50"
+                      : "text-muted hover:bg-sidebar-hover hover:text-foreground"
                   }`}
                 >
                   {f.path}
@@ -593,8 +604,10 @@ function FilesPane({
             ))
         )}
       </ul>
-      <pre className="flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed">
-        {selectedFile?.content ?? "Select a file to view its contents."}
+      <pre className="scrollbar-thin flex-1 overflow-auto bg-[#09090b] p-5 font-mono text-xs leading-relaxed text-foreground select-text">
+        {selectedFile?.content ?? (
+          <span className="text-muted/50 italic">Select a file to view its contents.</span>
+        )}
       </pre>
     </div>
   );
@@ -612,10 +625,10 @@ function Tab({
   return (
     <button
       onClick={onClick}
-      className={`rounded-md px-3 py-1 text-sm ${
+      className={`relative h-11 px-4 text-xs font-semibold uppercase tracking-[0.05em] transition-all ${
         active
-          ? "bg-zinc-200 font-medium dark:bg-zinc-700"
-          : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          ? "text-accent border-b-2 border-accent bg-background"
+          : "text-muted hover:text-foreground hover:bg-sidebar-hover"
       }`}
     >
       {children}

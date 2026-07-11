@@ -9,7 +9,7 @@ import { SetupGate } from "@/components/SetupGate";
 
 const SUGGESTIONS = [
   {
-    color: "text-sky-700 dark:text-sky-400",
+    color: "text-sky-400",
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
         <rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="1.5" />
@@ -20,7 +20,7 @@ const SUGGESTIONS = [
     prompt: "A todo app with categories, priorities, and a dark theme",
   },
   {
-    color: "text-amber-700 dark:text-amber-400",
+    color: "text-amber-400",
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
         <circle cx="12.5" cy="7.5" r="3.5" stroke="currentColor" strokeWidth="1.5" />
@@ -32,7 +32,7 @@ const SUGGESTIONS = [
       "A weather app that uses geolocation to show current conditions and a 5-day forecast",
   },
   {
-    color: "text-emerald-700 dark:text-emerald-400",
+    color: "text-emerald-400",
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
         <path
@@ -99,7 +99,7 @@ function HomeInner() {
       {/* Sidebar overlay - mobile only */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -112,12 +112,12 @@ function HomeInner() {
       >
         <div className="flex h-full flex-col">
           {/* Logo */}
-          <div className="flex items-center gap-2.5 px-4 py-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-brand text-xs font-semibold text-accent-foreground shadow-[0_1px_2px_rgba(0,0,0,0.16),0_4px_10px_rgba(220,74,39,0.18)]">
+          <div className="flex items-center gap-3 px-4 py-4">
+            <div className="animate-shimmer flex h-8 w-8 items-center justify-center rounded-[10px] text-xs font-semibold text-accent-foreground shadow-[0_1px_2px_rgba(0,0,0,0.3),0_4px_14px_rgba(232,116,74,0.25)]">
               E
             </div>
             <div>
-              <span className="block text-sm font-semibold leading-none">Expo Builder</span>
+              <span className="block font-display text-[15px] font-normal leading-none tracking-[-0.01em]">Expo Builder</span>
               <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.16em] text-muted">Mobile workbench</span>
             </div>
           </div>
@@ -130,7 +130,7 @@ function HomeInner() {
                 setPrompt("");
                 textareaRef.current?.focus();
               }}
-              className="flex min-h-10 w-full items-center gap-2 rounded-[10px] bg-foreground px-3 py-2.5 text-sm font-medium text-background shadow-[0_1px_2px_rgba(0,0,0,0.18)] transition-[background-color,transform] hover:bg-brand hover:text-accent-foreground active:scale-[0.96]"
+              className="flex min-h-10 w-full items-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-accent-foreground shadow-[0_1px_2px_rgba(0,0,0,0.3),0_4px_12px_rgba(232,116,74,0.2)] transition-all hover:bg-accent-hover hover:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_6px_18px_rgba(232,116,74,0.3)] active:scale-[0.96]"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -143,7 +143,7 @@ function HomeInner() {
           <div className="scrollbar-thin flex-1 overflow-y-auto px-2">
             <div className="px-2 py-2 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted">Your apps</div>
             {projects === undefined ? (
-              <div className="px-2 py-2 text-sm text-muted">{"Loading\u2026"}</div>
+              <div className="px-2 py-2 text-sm text-muted">{"\u2026"}</div>
             ) : projects.length === 0 ? (
               <div className="px-2 py-2 text-sm text-muted">
                 No apps yet. Start building above.
@@ -170,35 +170,35 @@ function HomeInner() {
         <div className="flex items-center gap-3 border-b border-border px-4 py-3 md:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-sidebar-hover"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-sidebar-hover hover:text-foreground"
             aria-label="Open menu"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </button>
-          <span className="text-sm font-semibold">Expo Builder</span>
+          <span className="font-display text-sm">Expo Builder</span>
         </div>
 
         {/* Centered content */}
         <div className="ambient-glow flex flex-1 flex-col items-center justify-center px-6 py-8">
           {/* Greeting */}
           <div className="animate-fade-in-up text-center" style={{ animationDelay: "0ms" }}>
-            <div className="mx-auto mb-4 flex w-fit items-center gap-2 rounded-full bg-sidebar px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-muted shadow-[inset_0_0_0_1px_var(--border)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+            <div className="mx-auto mb-5 flex w-fit items-center gap-2 rounded-full bg-surface-raised/60 px-3.5 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-muted shadow-[inset_0_0_0_1px_var(--border)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-status-pulse" />
               Expo workspace ready
             </div>
-            <h1 className="text-3xl font-semibold tracking-[-0.035em] md:text-5xl">
+            <h1 className="font-display text-4xl font-normal tracking-[-0.03em] md:text-6xl" style={{ background: "linear-gradient(180deg, #f0eee8 30%, #c8a080 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               Build the app you wish existed.
             </h1>
-            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted md:text-base">
+            <p className="mx-auto mt-4 max-w-md text-sm leading-7 tracking-wide text-muted md:text-base">
               Describe the product and get a working Expo app—code, preview, and device testing in one place.
             </p>
           </div>
 
           {/* Input */}
           <div className="animate-fade-in-up mt-10 w-full max-w-2xl" style={{ animationDelay: "100ms" }}>
-            <div className="relative rounded-[20px] bg-input-bg shadow-[0_0_0_1px_var(--input-border),0_10px_35px_rgba(32,33,29,0.08)] transition-[box-shadow] focus-within:shadow-[0_0_0_2px_var(--brand),0_14px_40px_rgba(32,33,29,0.12)]">
+            <div className="relative rounded-3xl bg-surface shadow-[0_0_0_1px_var(--border),0_10px_35px_rgba(0,0,0,0.3)] transition-[box-shadow] focus-within:shadow-[0_0_0_2px_var(--accent),0_14px_50px_rgba(232,116,74,0.08)]">
               <textarea
                 ref={textareaRef}
                 value={prompt}
@@ -208,13 +208,13 @@ function HomeInner() {
                 }}
                 rows={3}
                 placeholder={"Describe the app you want to build\u2026"}
-                className="w-full resize-none bg-transparent px-5 pt-4 pb-14 text-sm outline-none placeholder:text-muted"
+                className="w-full resize-none bg-transparent px-5 pt-5 pb-14 text-sm outline-none placeholder:text-muted/60"
               />
               <div className="absolute bottom-3.5 right-3.5 flex items-center gap-2">
                 <button
                   onClick={() => start()}
                   disabled={busy || !prompt.trim()}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-accent-foreground shadow-[0_2px_8px_rgba(220,74,39,0.28)] transition-[background-color,transform,opacity] hover:bg-accent-hover active:scale-[0.96] disabled:opacity-30 disabled:shadow-none"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground shadow-[0_2px_8px_rgba(232,116,74,0.35)] transition-all hover:bg-accent-hover hover:shadow-[0_2px_14px_rgba(232,116,74,0.5)] active:scale-[0.96] disabled:opacity-30 disabled:shadow-none"
                   aria-label="Send"
                 >
                   {busy ? (
@@ -244,16 +244,17 @@ function HomeInner() {
 
             {/* Prompt suggestions */}
             <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {SUGGESTIONS.map((s) => (
+              {SUGGESTIONS.map((s, i) => (
                 <button
                   key={s.label}
                   onClick={() => {
                     setPrompt(s.prompt);
                     textareaRef.current?.focus();
                   }}
-                  className="group flex min-h-10 items-center gap-2 rounded-full bg-suggestion-bg px-3.5 py-2 text-left shadow-[0_0_0_1px_var(--suggestion-border),0_1px_2px_rgba(0,0,0,0.04)] transition-[color,transform,box-shadow] hover:text-foreground hover:shadow-[0_0_0_1px_var(--input-border),0_4px_12px_rgba(32,33,29,0.07)] active:scale-[0.96]"
+                  className="animate-fade-in-up glass group flex min-h-10 items-center gap-2 rounded-full bg-suggestion-bg px-4 py-2 text-left shadow-[0_0_0_1px_var(--suggestion-border),0_1px_3px_rgba(0,0,0,0.2)] transition-all hover:text-foreground hover:shadow-[0_0_0_1px_var(--accent),0_4px_16px_rgba(232,116,74,0.08)] active:scale-[0.96]"
+                  style={{ animationDelay: `${200 + i * 60}ms` }}
                 >
-                  <span className={`shrink-0 [&>svg]:h-4 [&>svg]:w-4 ${s.color}`}>
+                  <span className={`shrink-0 [&>svg]:h-[18px] [&>svg]:w-[18px] ${s.color}`}>
                     {s.icon}
                   </span>
                   <span className="text-xs text-muted transition-colors group-hover:text-foreground sm:text-sm">
@@ -263,7 +264,7 @@ function HomeInner() {
               ))}
             </div>
 
-            <p className="mt-3 text-center text-xs text-muted">
+            <p className="mt-4 text-center text-xs text-muted/60">
               Expo Builder can make mistakes. Check important code.
             </p>
           </div>
@@ -289,7 +290,7 @@ function ProjectItem({
   const isRunning = project.sandboxStatus === "running";
 
   return (
-    <div className="group relative flex min-h-10 items-center rounded-lg px-2 py-2 transition-colors hover:bg-sidebar-hover">
+    <div className="group relative flex min-h-10 items-center rounded-lg px-2 py-2 transition-colors hover:bg-surface-raised">
       <Link
         href={`/project/${project._id}`}
         onClick={onNavigate}
@@ -297,10 +298,10 @@ function ProjectItem({
       >
         <span
           className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-            isRunning ? "bg-green-500" : "bg-zinc-400"
+            isRunning ? "bg-emerald-400 shadow-[0_0_6px_rgba(74,222,128,0.4)]" : "bg-muted/40"
           }`}
         />
-        <span className="truncate">{project.name}</span>
+        <span className="truncate text-muted transition-colors group-hover:text-foreground">{project.name}</span>
       </Link>
       <button
         onClick={(e) => {
@@ -308,7 +309,7 @@ function ProjectItem({
           e.stopPropagation();
           onDelete();
         }}
-        className="ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted opacity-0 transition-[color,opacity] hover:text-red-600 group-hover:opacity-100 focus:opacity-100"
+        className="ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted opacity-0 transition-all hover:text-danger group-hover:opacity-100 focus:opacity-100"
         aria-label="Delete project"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
