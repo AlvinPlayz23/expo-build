@@ -20,9 +20,22 @@ import {
   MessageSquare, 
   Code2, 
   Smartphone,
+  Tablet,
+  Monitor,
   ChevronLeft,
   AlertCircle
 } from "lucide-react";
+
+type PreviewMode = "mobile" | "tablet" | "web";
+
+const PREVIEW_VIEWPORTS: Record<
+  PreviewMode,
+  { label: string; width: number | null; height: number | null; icon: typeof Smartphone }
+> = {
+  mobile: { label: "Mobile", width: 390, height: 844, icon: Smartphone },
+  tablet: { label: "Tablet", width: 834, height: 1112, icon: Tablet },
+  web: { label: "Web", width: null, height: null, icon: Monitor },
+};
 
 export default function ProjectPage() {
   return (
@@ -59,6 +72,7 @@ function Workspace() {
   const [reloadKey, setReloadKey] = useState(0);
   const [banner, setBanner] = useState<string | null>(null);
   const [chatExpanded, setChatExpanded] = useState(true);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("mobile");
   const autoSent = useRef(false);
 
   async function send(text: string) {
@@ -242,7 +256,31 @@ function Workspace() {
                 Device
               </Tab>
             </div>
-            <div className="ml-auto flex items-center gap-1.5 pr-3">
+            {tab === "preview" && (
+              <div className="ml-auto mr-1.5 flex items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-raised/60 p-0.5">
+                {(Object.keys(PREVIEW_VIEWPORTS) as PreviewMode[]).map((mode) => {
+                  const { label, icon: Icon } = PREVIEW_VIEWPORTS[mode];
+                  const active = previewMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => setPreviewMode(mode)}
+                      title={label}
+                      aria-label={label}
+                      aria-pressed={active}
+                      className={`flex h-6 w-7 items-center justify-center rounded-lg transition-all ${
+                        active
+                          ? "bg-surface text-foreground shadow-[inset_0_0_0_1px_var(--border),0_1px_2px_rgba(0,0,0,0.3)]"
+                          : "text-muted hover:text-foreground"
+                      }`}
+                    >
+                      <Icon size={13} />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className={`flex items-center gap-1.5 pr-3 ${tab === "preview" ? "" : "ml-auto"}`}>
               <ActionButton onClick={() => setReloadKey((k) => k + 1)} icon={<RefreshCw size={11} />}>
                 Reload
               </ActionButton>
@@ -270,6 +308,7 @@ function Workspace() {
                 url={project?.previewUrl}
                 status={project?.sandboxStatus}
                 reloadKey={reloadKey}
+                mode={previewMode}
               />
             ) : tab === "files" ? (
               <FilesPane
@@ -375,11 +414,13 @@ function PreviewPane({
   url,
   status,
   reloadKey,
+  mode,
 }: {
   projectId: string;
   url?: string;
   status?: string;
   reloadKey: number;
+  mode: PreviewMode;
 }) {
   const [bundleReady, setBundleReady] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -477,15 +518,40 @@ function PreviewPane({
     );
   }
 
+  const iframe = (
+    <iframe
+      key={`${reloadKey}-${url}`}
+      src={url}
+      className="h-full w-full bg-white"
+      title="Expo preview"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+    />
+  );
+
+  const isWeb = mode === "web";
+  const { width, height } = PREVIEW_VIEWPORTS[mode];
+
   return (
-    <div className="relative flex-1">
-      <iframe
-        key={`${reloadKey}-${url}`}
-        src={url}
-        className="absolute inset-0 h-full w-full bg-white"
-        title="Expo preview"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-      />
+    <div
+      className={`flex flex-1 items-center justify-center overflow-auto bg-[#0e0e11] transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        isWeb ? "p-0" : "p-6"
+      }`}
+    >
+      <div
+        className={`relative shrink-0 overflow-hidden bg-black transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          isWeb
+            ? "h-full w-full rounded-none border-0 shadow-none ring-0"
+            : "rounded-[2rem] border border-border shadow-[0_20px_60px_rgba(0,0,0,0.5)] ring-1 ring-white/5"
+        }`}
+        style={{
+          width: isWeb ? "100%" : (width ?? undefined),
+          height: isWeb ? "100%" : (height ?? undefined),
+          maxWidth: "100%",
+          maxHeight: "100%",
+        }}
+      >
+        {iframe}
+      </div>
     </div>
   );
 }
