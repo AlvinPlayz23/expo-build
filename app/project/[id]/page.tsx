@@ -23,7 +23,11 @@ import {
   Tablet,
   Monitor,
   ChevronLeft,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  FilePlus,
+  Pencil,
+  List
 } from "lucide-react";
 
 type PreviewMode = "mobile" | "tablet" | "web";
@@ -48,7 +52,16 @@ export default function ProjectPage() {
   );
 }
 
-type Msg = { _id: string; role: string; content: string; streaming?: boolean };
+type MsgPart =
+  | { type: "text"; text: string }
+  | { type: "tool"; tool: string; path?: string };
+type Msg = {
+  _id: string;
+  role: string;
+  content: string;
+  parts?: MsgPart[];
+  streaming?: boolean;
+};
 type FileDoc = { _id: string; path: string; content: string };
 
 function Workspace() {
@@ -366,28 +379,18 @@ function ChatLog({
           </p>
         </div>
       ) : (
-        messages.map((m) => (
-          <div
-            key={m._id}
-            className={`animate-message-in flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}
-          >
-            <span className={`role-label mb-1 ${m.role === "user" ? "text-accent/60" : "text-muted/50"}`}>
-              {m.role === "user" ? "You" : "AI"}
-            </span>
-            <div
-              className={`inline-block max-w-[90%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed ${
-                m.role === "user"
-                  ? "rounded-br-md bg-accent text-accent-foreground shadow-[0_2px_8px_rgba(232,116,74,0.2)]"
-                  : "rounded-bl-md bg-surface-raised text-foreground shadow-[inset_0_0_0_1px_var(--border-subtle)]"
-              }`}
-            >
-              {m.content || (m.streaming ? "\u2026" : "")}
-              {m.streaming && (
-                <span className="ml-1 inline-block animate-pulse text-accent">{"\u258d"}</span>
-              )}
+        messages.map((m) =>
+          m.role === "user" ? (
+            <div key={m._id} className="animate-message-in flex flex-col items-end">
+              <span className="role-label mb-1 text-accent/60">You</span>
+              <div className="inline-block max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-[13px] leading-relaxed text-accent-foreground shadow-[0_2px_8px_rgba(232,116,74,0.2)]">
+                {m.content}
+              </div>
             </div>
-          </div>
-        ))
+          ) : (
+            <AssistantMessage key={m._id} message={m} />
+          ),
+        )
       )}
       {sending && messages && messages[messages.length - 1]?.role === "user" && (
         <div className="animate-message-in flex flex-col items-start">
@@ -403,6 +406,67 @@ function ChatLog({
         </div>
       )}
       <div ref={endRef} />
+    </div>
+  );
+}
+
+/* ─── Assistant Message (interleaved prose + tool chips) ─── */
+
+const TOOL_ICONS: Record<string, typeof Eye> = {
+  read: Eye,
+  write: FilePlus,
+  edit: Pencil,
+  list: List,
+};
+
+function ToolChip({ tool, path }: { tool: string; path?: string }) {
+  const Icon = TOOL_ICONS[tool] ?? Terminal;
+  return (
+    <div className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border-subtle bg-surface-raised/60 px-2.5 py-1 font-mono text-[11px]">
+      <Icon size={11} className="shrink-0 text-muted/60" />
+      <span className="text-foreground/70">{tool}</span>
+      {path && <span className="truncate text-muted/60">{path}</span>}
+    </div>
+  );
+}
+
+function AssistantMessage({ message }: { message: Msg }) {
+  const parts: MsgPart[] =
+    message.parts && message.parts.length > 0
+      ? message.parts
+      : message.content
+        ? [{ type: "text", text: message.content }]
+        : [];
+
+  // The last non-empty text part carries the blinking cursor while streaming.
+  let lastTextIdx = -1;
+  parts.forEach((p, i) => {
+    if (p.type === "text" && p.text.trim()) lastTextIdx = i;
+  });
+
+  return (
+    <div className="animate-message-in flex flex-col items-start gap-1.5">
+      <span className="role-label mb-0.5 text-muted/50">AI</span>
+      {parts.map((p, i) => {
+        if (p.type === "tool") {
+          return <ToolChip key={i} tool={p.tool} path={p.path} />;
+        }
+        if (!p.text.trim()) return null;
+        return (
+          <div
+            key={i}
+            className="inline-block max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-bl-md bg-surface-raised px-4 py-2.5 text-[13px] leading-relaxed text-foreground shadow-[inset_0_0_0_1px_var(--border-subtle)]"
+          >
+            {p.text.trim()}
+            {message.streaming && i === lastTextIdx && (
+              <span className="ml-1 inline-block animate-pulse text-accent">{"\u258d"}</span>
+            )}
+          </div>
+        );
+      })}
+      {message.streaming && lastTextIdx === -1 && (
+        <span className="inline-block animate-pulse text-accent">{"\u258d"}</span>
+      )}
     </div>
   );
 }

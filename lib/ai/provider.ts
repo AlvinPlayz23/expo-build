@@ -1,16 +1,14 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
+import type { LanguageModel } from "ai";
 import { log } from "../log";
 
 // Single place that knows which provider/model generates the apps. The agent
-// only sees `streamCompletion` and never touches a provider SDK directly, so
-// swapping providers is just an env flag.
-
-export type LLMMessage = { role: "user" | "assistant"; content: string };
+// only sees `getModel()` and hands it to the AI SDK's `streamText`, so swapping
+// providers is just an env flag.
 
 const PROVIDER = (process.env.LLM_PROVIDER || "anthropic").toLowerCase();
-const MAX_TOKENS = 16_000;
 
 // Per-provider model defaults; AI_MODEL overrides either one.
 function modelId(): string {
@@ -18,87 +16,38 @@ function modelId(): string {
   return PROVIDER === "openai" ? "gpt-4o" : "claude-sonnet-5";
 }
 
-let anthropic: Anthropic | null = null;
-let openai: OpenAI | null = null;
+/**
+ * Build the AI SDK language model for the configured provider. Anthropic and
+ * OpenAI-compatible endpoints are both supported; set OPENAI_BASEURL to point
+ * the OpenAI path at any compatible server (Azure, OpenRouter, a local model…).
+ */
+export function getModel(): LanguageModel {
+  const id = modelId();
+  log("ai", `provider=${PROVIDER} model=${id} — building AI SDK model`);
 
-function getAnthropic(): Anthropic {
+  if (PROVIDER === "openai") {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error(
+        "OPENAI_API_KEY is not set. Add it to .env.local (see .env.example).",
+      );
+    }
+    const openai = createOpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      // Unset → SDK default (https://api.openai.com/v1).
+      baseURL: process.env.OPENAI_BASEURL || undefined,
+    });
+    // Force the chat-completions API so any OpenAI-compatible endpoint works
+    // (the default Responses API isn't supported by most third-party servers).
+    return openai.chat(id);
+  }
+
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error(
       "ANTHROPIC_API_KEY is not set. Add it to .env.local (see .env.example).",
     );
   }
-  if (!anthropic) {
-    anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      timeout: 120_000, // fail loudly instead of hanging forever
-      maxRetries: 1,
-    });
-  }
-  return anthropic;
-}
-
-function getOpenAI(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error(
-      "OPENAI_API_KEY is not set. Add it to .env.local (see .env.example).",
-    );
-  }
-  if (!openai) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      // If OPENAI_BASEURL is unset, the SDK falls back to its default
-      // (https://api.openai.com/v1). Set it to point at any OpenAI-compatible
-      // endpoint (Azure, OpenRouter, a local server, etc.).
-      baseURL: process.env.OPENAI_BASEURL || undefined,
-      timeout: 120_000, // fail loudly instead of hanging forever
-      maxRetries: 1,
-    });
-  }
-  return openai;
-}
-
-/**
- * Stream a completion as plain text deltas, hiding provider differences.
- * The agent feeds these deltas straight into the file-op parser.
- */
-export async function* streamCompletion(opts: {
-  system: string;
-  messages: LLMMessage[];
-}): AsyncGenerator<string> {
-  log("ai", `provider=${PROVIDER} model=${modelId()} — requesting completion`);
-
-  if (PROVIDER === "openai") {
-    const client = getOpenAI();
-    const stream = await client.chat.completions.create({
-      model: modelId(),
-      max_tokens: MAX_TOKENS,
-      stream: true,
-      // OpenAI takes the system prompt as the first message.
-      messages: [{ role: "system", content: opts.system }, ...opts.messages],
-    });
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) yield delta;
-    }
-    return;
-  }
-
-  // Default: Anthropic.
-  const client = getAnthropic();
-  const stream = client.messages.stream({
-    model: modelId(),
-    max_tokens: MAX_TOKENS,
-    system: opts.system,
-    messages: opts.messages,
-  });
-  for await (const event of stream) {
-    if (
-      event.type === "content_block_delta" &&
-      event.delta.type === "text_delta"
-    ) {
-      yield event.delta.text;
-    }
-  }
+  const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return anthropic(id);
 }
 
 export const providerName = PROVIDER;

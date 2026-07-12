@@ -74,7 +74,24 @@ export async function POST(
     streaming: true,
   });
 
-  let prose = "";
+  // The assistant message is an ordered list of parts (prose + tool chips) so
+  // the UI renders text → tool → text → tool in the order it actually happened.
+  type MsgPart =
+    | { type: "text"; text: string }
+    | { type: "tool"; tool: string; path?: string };
+  const parts: MsgPart[] = [];
+  const appendText = (delta: string) => {
+    const last = parts[parts.length - 1];
+    if (last && last.type === "text") last.text += delta;
+    else parts.push({ type: "text", text: delta });
+  };
+  // Plain-text fallback (used for history sent to the model and old UIs).
+  const textOf = () =>
+    parts
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join("");
+
   let lastFlush = 0;
   let finalized = false;
   const writes: ProjectFile[] = [];
@@ -90,7 +107,8 @@ export async function POST(
     await convex
       .mutation(api.messages.update, {
         id: assistantId,
-        content: prose,
+        content: textOf(),
+        parts,
         streaming: true,
       })
       .catch((e) => logErr("chat", "flush failed", e));
@@ -104,7 +122,8 @@ export async function POST(
     await convex
       .mutation(api.messages.update, {
         id: assistantId,
-        content: prose.trim() || "(no changes)",
+        content: textOf().trim() || (parts.length ? "" : "(no changes)"),
+        parts,
         streaming: false,
       })
       .catch((e) => logErr("chat", "finalize failed", e));
@@ -115,30 +134,32 @@ export async function POST(
     for await (const ev of runAgent({ history, files })) {
       switch (ev.type) {
         case "text":
-          prose += ev.delta;
+          appendText(ev.delta);
           charCount += ev.delta.length;
           await flush(false);
           break;
-        case "file-open":
-          log("chat", `AI writing file: ${ev.path}`);
-          prose += `\n\n\`${ev.path}\`…`;
+        case "tool-call":
+          // A tool-call chip, in order with the prose. This also closes the
+          // current text part so the next prose starts a fresh bubble.
+          log("chat", `AI tool: ${ev.tool}${ev.path ? ` ${ev.path}` : ""}`);
+          parts.push({ type: "tool", tool: ev.tool, path: ev.path });
           await flush(true);
           break;
-        case "file-close":
-          writes.push({ path: ev.path, content: ev.content });
+        case "file-write":
           changed.push(ev.path);
-          prose = prose.replace(`\n\n\`${ev.path}\`…`, `\n\n✓ \`${ev.path}\``);
-          await flush(true);
           break;
-        case "delete":
-          deletes.push(ev.path);
+        case "file-delete":
           changed.push(ev.path);
-          prose += `\n\n🗑️ \`${ev.path}\``;
-          await flush(true);
+          break;
+        case "done":
+          // The finalized working set is authoritative — one write per file.
+          for (const w of ev.writes) writes.push(w);
+          for (const d of ev.deletes) deletes.push(d);
           break;
         case "error":
           logErr("chat", "AI error event", ev.message);
-          prose += `\n\n⚠️ ${ev.message}`;
+          appendText(`\n\n⚠️ ${ev.message}`);
+          await flush(true);
           break;
       }
     }
@@ -193,11 +214,18 @@ export async function POST(
     }
   } catch (err) {
     logErr("chat", "unexpected failure", err);
-    prose += `\n\n⚠️ ${err instanceof Error ? err.message : "Something went wrong."}`;
+    appendText(
+      `\n\n⚠️ ${err instanceof Error ? err.message : "Something went wrong."}`,
+    );
   } finally {
     await finalize();
     log("chat", `■ done in ${Date.now() - t0}ms`);
   }
 
-  return Response.json({ ok: !sandboxError, changed, previewUrl, sandboxError });
+  return Response.json({
+    ok: !sandboxError,
+    changed: [...new Set(changed)],
+    previewUrl,
+    sandboxError,
+  });
 }
