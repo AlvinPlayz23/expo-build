@@ -156,88 +156,150 @@ async function curlHttpCode(
 }
 
 /**
- * Nudge Metro's file watcher to (re)index the tree, then re-resolve App.js.
- *
- * Order matters: touch every dependency file FIRST so Metro picks them up into
- * its module map (the watcher often misses files created in brand-new
- * subdirectories like `components/`), THEN touch App.js LAST so it re-resolves
- * its imports against the now-fully-indexed tree. Touching only App.js is
- * insufficient — if the components were never indexed, App.js keeps failing to
- * resolve them no matter how many times it's touched.
+ * Request a single bundle and return its HTTP status. `coldTimeoutSec` should
+ * be generous on the first request after a (re)start, because that request may
+ * itself be the cold compile (15–60s, longer for a hermes native build) — a
+ * short timeout would abort Metro's in-flight compile. The resolution stage
+ * happens *before* the hermes transform, so a minimal `platform=…&dev=true`
+ * request is enough to force a full graph resolve.
  */
-async function touchTree(
+async function requestBundle(
   sandbox: Sandbox,
-  dependencyPaths: string[],
-): Promise<void> {
-  // Touch dependencies first (in write order), so the watcher indexes them.
-  if (dependencyPaths.length > 0) {
-    log("sandbox", `touching ${dependencyPaths.length} dependency file(s) then App.js: ${dependencyPaths.join(", ")}`);
-  }
-  for (const rel of dependencyPaths) {
-    const safe = rel.replace(/^\/+/, "");
-    await sandbox.commands
-      .run(`touch ${JSON.stringify(`${APP_DIR}/${safe}`)}`)
-      .catch(() => {});
-  }
-  // App.js last, so it re-resolves against the complete, indexed tree.
-  await sandbox.commands.run(`touch ${APP_DIR}/App.js`).catch(() => {});
+  platform: "web" | "ios" | "android",
+  timeoutSec: number,
+): Promise<string> {
+  const bundleUrl =
+    `http://localhost:${PREVIEW_PORT}/index.bundle?platform=${platform}&dev=true&minify=false`;
+  return curlHttpCode(sandbox, bundleUrl, timeoutSec);
 }
 
 /**
- * After writing multiple files, Metro's in-container file watcher can miss the
- * creation of files in brand-new subdirectories (e.g. `components/`). It then
- * caches an "Unable to resolve module" miss and serves the web bundle as a JSON
- * 500 *forever* — the browser reports a MIME error ("Refused to execute script
- * … MIME type ('application/json')"). A single App.js works only because it has
- * no local imports to resolve.
+ * Restart Metro from scratch so it re-crawls the filesystem and rebuilds its
+ * module/haste map from what is *actually on disk*.
  *
- * Warm the web bundle server-side: request it, and on a transient resolution
- * miss re-`touch` the dependency files then App.js to invalidate the cached
- * graph, then retry a few times. This is bounded so it never stalls the chat
- * response for long, and it bails immediately on a real code error so Metro's
- * redbox still shows.
+ * This is the reliable escalation for the multi-file JSON-500 / MIME error.
+ * The root cause is that Metro's in-container file watcher never establishes a
+ * watch on a brand-new subdirectory (e.g. `components/`): the create events
+ * fire before the watch on the new dir is added, so the files are never indexed
+ * and Metro caches an "Unable to resolve module" miss *in memory*, serving the
+ * bundle as a JSON 500 forever (the browser then reports a MIME error, and
+ * Expo Go reports "none of these files exist"). Touching the files can't fix
+ * this — there is no watch to fire. Only a process that crawls the tree afresh
+ * will see them, so we kill Metro and relaunch it detached.
  *
- * This runs *before* syncSandbox returns the preview URL, i.e. before the
- * client mounts the iframe and starts polling /preview-status, so we don't
- * fight a concurrent bundle curl (two parallel bundle requests can abort each
- * other's first compile). The first attempt uses a long timeout because that
- * request may itself be the cold compile (15–60s) — a short timeout there
- * would abort it and trigger a needless re-touch.
+ * Note: we do NOT pass `--clear`. The stale resolution is in-memory process
+ * state, not the on-disk transform cache; a plain restart discards it and the
+ * fresh crawl finds the components. `--clear` only wipes compiled output and
+ * adds latency.
+ *
+ * Tradeoff: restarting rebuilds the ngrok tunnel, so the exp:// URL changes and
+ * anyone with Expo Go already open must re-scan. Acceptable — it only happens
+ * on multi-file turns, and the Device tab fetches a fresh URL on demand.
  */
-async function warmWebBundle(
-  sandbox: Sandbox,
-  dependencyPaths: string[],
-): Promise<void> {
-  const bundleUrl =
-    `http://localhost:${PREVIEW_PORT}/index.bundle?platform=web&dev=true&minify=false`;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    // First attempt may be the cold compile; give it room. Retries are faster.
-    const code = await curlHttpCode(sandbox, bundleUrl, attempt === 1 ? 90 : 45);
-    log("sandbox", `warm bundle attempt ${attempt} → HTTP ${code}`);
-    if (code === "200") return;
+const METRO_START_CMD =
+  `cd ${APP_DIR} && CI=1 EXPO_NO_TELEMETRY=1 ` +
+  `npx expo start --web --tunnel --port ${PREVIEW_PORT} > /home/user/expo.log 2>&1`;
 
-    if (code === "500" || code === "503") {
-      const logText = await readLog(sandbox);
-      // Only retry the watcher race, not genuine compile/syntax errors.
-      if (!/Unable to resolve/i.test(logText)) {
-        logErr(
-          "sandbox",
-          "web bundle failed with a code error (not a resolution race) — showing redbox",
-        );
-        return;
-      }
-      logErr(
-        "sandbox",
-        "resolution miss — re-touching dependency files then App.js and retrying",
-      );
-      await touchTree(sandbox, dependencyPaths);
-      await new Promise((r) => setTimeout(r, 1500));
-      continue;
+async function restartMetro(sandbox: Sandbox): Promise<void> {
+  log("sandbox", "restarting Metro to re-crawl the file tree…");
+  // Kill the running dev server. The baked start command is `npx expo start`,
+  // whose bundler runs as an `@expo/cli` child that holds the port — kill both
+  // argv patterns. node:20-slim lacks lsof/fuser, so kill by argv, not by port.
+  await sandbox.commands
+    .run(
+      `pkill -TERM -f "expo start" || true; ` +
+        `pkill -TERM -f "@expo/cli" || true; ` +
+        `sleep 1; ` +
+        `pkill -KILL -f "expo start" || true; ` +
+        `pkill -KILL -f "@expo/cli" || true`,
+    )
+    .catch(() => {});
+
+  // Relaunch with E2B's `background: true` so the process is detached at the
+  // SDK level (returns a CommandHandle immediately) and survives after this
+  // call returns — unlike `nohup ... &`, which E2B can reap when the command
+  // shell exits. Reuse the exact baked flags so the tunnel still comes up.
+  await sandbox.commands
+    .run(METRO_START_CMD, { background: true })
+    .catch(() => {});
+
+  // Wait (bounded) for Metro to reopen the port before we re-warm the bundle.
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    const code = await curlHttpCode(
+      sandbox,
+      `http://localhost:${PREVIEW_PORT}/`,
+      3,
+    );
+    if (code !== "000") {
+      log("sandbox", `Metro back up (HTTP ${code})`);
+      return;
     }
-
-    // 000/timeout or other transient — stop warming; the client keeps polling.
-    return;
+    await new Promise((r) => setTimeout(r, 1500));
   }
+  logErr("sandbox", "Metro did not reopen the port within 45s after restart");
+}
+
+/**
+ * Ensure the web bundle resolves after a multi-file write.
+ *
+ * Flow: warm web once. If it 200s, we're done (the common case for edits to
+ * *existing* files, where hot-reload already works). If it 500/503s, that's the
+ * brand-new-subdir watcher race — restart Metro so it re-crawls the complete
+ * on-disk tree, then warm web again. A genuine code error simply stays 500
+ * after the restart and is surfaced (redbox) by `probeBundle`'s post-compile
+ * log check downstream.
+ *
+ * This runs *before* syncSandbox returns the preview URL, so we don't fight a
+ * concurrent bundle curl from the client's /preview-status polling (two
+ * parallel bundle requests can abort each other's first compile).
+ *
+ * We warm only `web` here (the iframe). The native (ios/android) graph is a
+ * *separate* Metro graph; after the restart the shared FS crawl is fresh, so
+ * the Device/QR path (`warmNativeForDevice`) resolves cleanly with a plain
+ * cold compile and no watcher race. Leaving native off the hot path also saves
+ * a hermes compile every turn.
+ */
+async function ensureWebBundle(sandbox: Sandbox): Promise<void> {
+  // First warm may be the cold compile — give it room.
+  const first = await requestBundle(sandbox, "web", 90);
+  log("sandbox", `warm web bundle → HTTP ${first}`);
+  if (first === "200") return;
+
+  // 000/timeout means Metro is still compiling, not failing — let the client
+  // keep polling rather than needlessly restarting.
+  if (first !== "500" && first !== "503") return;
+
+  // 500/503: almost certainly the new-subdir watcher race. Restart Metro so it
+  // re-crawls the tree, then warm once more against the fresh graph.
+  await restartMetro(sandbox);
+  const second = await requestBundle(sandbox, "web", 90);
+  log("sandbox", `warm web bundle after restart → HTTP ${second}`);
+  if (second !== "200") {
+    logErr(
+      "sandbox",
+      `web bundle still ${second} after Metro restart — leaving it to probeBundle/redbox`,
+    );
+  }
+}
+
+/**
+ * Warm the native (ios) bundle for the Device/QR flow. The phone requests a
+ * *separate* native Metro graph from the web iframe. After a chat turn's Metro
+ * restart the shared FS crawl is fresh, so a plain cold ios compile resolves
+ * correctly with no watcher race. If it still 500s (e.g. a resumed box whose
+ * files were written into a new subdir without a restart), restart Metro and
+ * try once more.
+ */
+async function warmNativeForDevice(sandbox: Sandbox): Promise<void> {
+  const first = await requestBundle(sandbox, "ios", 90);
+  log("sandbox", `warm ios bundle → HTTP ${first}`);
+  if (first === "200") return;
+  if (first !== "500" && first !== "503") return;
+
+  await restartMetro(sandbox);
+  const second = await requestBundle(sandbox, "ios", 90);
+  log("sandbox", `warm ios bundle after restart → HTTP ${second}`);
 }
 
 /**
@@ -463,13 +525,11 @@ export async function syncSandbox(opts: {
   }
 
   // Multi-file writes are where Metro's watcher misses new subdir files and
-  // caches a resolution miss (the JSON-500 / MIME error). Touch App.js so it
-  // re-resolves against the now-complete tree, then warm the bundle with a
-  // bounded retry loop. The single-file path skips this to stay fast.
+  // caches a resolution miss (the JSON-500 / MIME error). Warm the web bundle;
+  // if it fails, restart Metro so it re-crawls the complete on-disk tree. The
+  // single-file path skips this to stay fast (hot-reload handles it).
   if (dependencyWrites.length > 0) {
-    const dependencyPaths = dependencyWrites.map((f) => f.path.replace(/^\/+/, ""));
-    await touchTree(sandbox, dependencyPaths);
-    await warmWebBundle(sandbox, dependencyPaths);
+    await ensureWebBundle(sandbox);
   }
 
   // Note: we do NOT block on the web bundle compiling here — that can take
@@ -504,6 +564,11 @@ export async function getDeviceUrl(opts: {
   reason?: string;
 }> {
   const { sandbox } = await connectOrCreate(opts.sandboxId);
+  // Warm the native graph so Expo Go doesn't hit a stale "Unable to resolve"
+  // miss on components written during the last chat turn. The web iframe and
+  // the phone use separate per-platform Metro graphs; the chat path warms
+  // web+ios, but a resumed box or a just-written app may still need this.
+  await warmNativeForDevice(sandbox).catch(() => {});
   const result = await waitForDeviceUrl(sandbox);
   return {
     sandboxId: sandbox.sandboxId,
